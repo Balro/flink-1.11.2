@@ -130,6 +130,16 @@ public final class GlobalConfiguration {
 			configuration.addAll(dynamicProperties);
 		}
 
+		/*
+		由java参数中提取额外参数覆盖默认，避免为多个不同的作业单独提供创建配置文件。
+		export JVM_AEGS="$JVM_ARGS -Dflink.a=b"
+		 */
+		System.getProperties().forEach((k, v) -> {
+			if (k.toString().startsWith("flink.")) {
+				configuration.setString(k.toString().substring("flink.".length()), v.toString());
+			}
+		});
+
 		return configuration;
 	}
 
