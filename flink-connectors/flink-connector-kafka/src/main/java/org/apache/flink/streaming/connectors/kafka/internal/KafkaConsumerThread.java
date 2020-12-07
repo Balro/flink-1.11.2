@@ -575,8 +575,10 @@ public class KafkaConsumerThread<T> extends Thread {
 					long current_time = System.currentTimeMillis();
 					if (start_time > current_time) {
 						TimeUnit.MILLISECONDS.sleep(start_time - current_time);
+						last_start_time = start_time;
+					} else {
+						last_start_time = current_time;
 					}
-					last_start_time = start_time;
 					cur_size = 0;
 				}
 			} catch (InterruptedException e) {
