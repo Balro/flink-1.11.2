@@ -174,7 +174,8 @@ public class HBaseSerde {
 				for (int q = 0; q < this.qualifiers[f].length; q++) {
 					// get quantifier key
 					byte[] qualifier = qualifiers[f][q];
-					delete.addColumn(familyKey, qualifier);
+//					delete.addColumn(familyKey, qualifier);
+					delete.addColumns(familyKey, qualifier); // 删除全部历史版本数据，避免遗留脏数据。
 				}
 			}
 		}

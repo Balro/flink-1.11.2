@@ -178,17 +178,18 @@ public class HBaseSinkFunction<T>
 		checkErrorAndRethrow();
 
 		mutator.mutate(mutationConverter.convertToMutation(value));
+		mutator.flush(); // 强制落地有序，避免处理binlog等数据时生成脏数据。
 
 		// flush when the buffer number of mutations greater than the configured max size.
-		if (bufferFlushMaxMutations > 0 && numPendingRequests.incrementAndGet() >= bufferFlushMaxMutations) {
-			flush();
-		}
+//		if (bufferFlushMaxMutations > 0 && numPendingRequests.incrementAndGet() >= bufferFlushMaxMutations) {
+//			flush();
+//		}
 	}
 
 	private void flush() throws IOException {
 		// BufferedMutator is thread-safe
 		mutator.flush();
-		numPendingRequests.set(0);
+//		numPendingRequests.set(0);
 		checkErrorAndRethrow();
 	}
 
