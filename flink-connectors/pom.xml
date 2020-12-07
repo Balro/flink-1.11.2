@@ -46,6 +46,7 @@ under the License.
 		<module>flink-connector-elasticsearch6</module>
 		<module>flink-connector-elasticsearch7</module>
 		<module>flink-connector-hbase</module>
+		<module>flink-connector-hbase2</module>
 		<module>flink-connector-hive</module>
 		<module>flink-connector-jdbc</module>
 		<module>flink-connector-rabbitmq</module>

@@ -49,6 +49,19 @@ under the License.
 		<developerConnection>scm:git:https://gitbox.apache.org/repos/asf/flink.git</developerConnection>
 	</scm>
 
+	<repositories>
+		<repository>
+			<id>aliyun-central</id>
+			<name>aliyun-central</name>
+			<url>https://maven.aliyun.com/repository/central</url>
+		</repository>
+		<repository>
+			<id>cdh</id>
+			<name>cloudera-release</name>
+			<url>https://repository.cloudera.com/artifactory/cloudera-repos</url>
+		</repository>
+	</repositories>
+
 	<modules>
 		<!-- Dummy module to force execution of the Maven Shade plugin (see Shade plugin below) -->
 		<module>tools/force-shading</module>
@@ -146,14 +159,14 @@ under the License.
 		-->
 		<minikdc.version>3.2.0</minikdc.version>
 		<generated.docs.dir>./docs/_includes/generated</generated.docs.dir>
-		<hive.version>2.3.4</hive.version>
+		<hive.version>2.1.1-cdh6.2.1</hive.version>
 		<hive.connector.orc.version>1.4.3</hive.connector.orc.version>
 		<orc.version>1.5.6</orc.version>
 		<!--
 			Hive 2.3.4 relies on Hadoop 2.7.2 and later versions.
 			For Hadoop 2.7, the minor Hadoop version supported for flink-shaded-hadoop-2-uber is 2.7.5
 		-->
-		<hivemetastore.hadoop.version>2.7.5</hivemetastore.hadoop.version>
+		<hivemetastore.hadoop.version>3.0.0-cdh6.2.1</hivemetastore.hadoop.version>
 		<japicmp.referenceVersion>1.11.1</japicmp.referenceVersion>
 		<japicmp.outputDir>tools/japicmp-output</japicmp.outputDir>
 	</properties>
