@@ -24,6 +24,9 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 
 import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -42,7 +45,7 @@ public class HBaseWriteStreamExample {
 
 	public static void main(String[] args) throws Exception {
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment
-				.getExecutionEnvironment();
+			.getExecutionEnvironment();
 
 		// data stream with random numbers
 		DataStream<String> dataStream = env.addSource(new SourceFunction<String>() {
@@ -77,6 +80,7 @@ public class HBaseWriteStreamExample {
 		private HTable table = null;
 		private String taskNumber = null;
 		private int rowNumber = 0;
+		private Connection conn = null;
 
 		private static final long serialVersionUID = 1L;
 
@@ -87,22 +91,23 @@ public class HBaseWriteStreamExample {
 
 		@Override
 		public void open(int taskNumber, int numTasks) throws IOException {
-			table = new HTable(conf, "flinkExample");
+			conn = ConnectionFactory.createConnection(conf);
+
+			table = (HTable) conn.getTable(TableName.valueOf("flinkExample"));
 			this.taskNumber = String.valueOf(taskNumber);
 		}
 
 		@Override
 		public void writeRecord(String record) throws IOException {
 			Put put = new Put(Bytes.toBytes(taskNumber + rowNumber));
-			put.add(Bytes.toBytes("entry"), Bytes.toBytes("entry"),
-					Bytes.toBytes(rowNumber));
+			put.addColumn(Bytes.toBytes("entry"), Bytes.toBytes("entry"),
+				Bytes.toBytes(rowNumber));
 			rowNumber++;
 			table.put(put);
 		}
 
 		@Override
 		public void close() throws IOException {
-			table.flushCommits();
 			table.close();
 		}
 

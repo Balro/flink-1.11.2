@@ -23,9 +23,10 @@ import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.configuration.Configuration;
 
-import org.apache.hadoop.hbase.client.HTable;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.*;
+
+import java.io.IOException;
 
 /**
  * {@link InputFormat} subclass that wraps the access for HTables.
@@ -37,6 +38,7 @@ public abstract class HBaseInputFormat<T extends Tuple> extends AbstractTableInp
 
 	/**
 	 * Constructs a {@link InputFormat} with hbase configuration to read data from hbase.
+	 *
 	 * @param hConf The configuration that connect to hbase.
 	 *              At least hbase.zookeeper.quorum and zookeeper.znode.parent need to be set.
 	 */
@@ -46,6 +48,7 @@ public abstract class HBaseInputFormat<T extends Tuple> extends AbstractTableInp
 
 	/**
 	 * Returns an instance of Scan that retrieves the required subset of records from the HBase table.
+	 *
 	 * @return The appropriate instance of Scan for this usecase.
 	 */
 	protected abstract Scan getScanner();
@@ -53,6 +56,7 @@ public abstract class HBaseInputFormat<T extends Tuple> extends AbstractTableInp
 	/**
 	 * What table is to be read.
 	 * Per instance of a TableInputFormat derivative only a single tablename is possible.
+	 *
 	 * @return The name of the table
 	 */
 	protected abstract String getTableName();
@@ -60,6 +64,7 @@ public abstract class HBaseInputFormat<T extends Tuple> extends AbstractTableInp
 	/**
 	 * The output from HBase is always an instance of {@link Result}.
 	 * This method is to copy the data in the Result instance into the required {@link Tuple}
+	 *
 	 * @param r The Result instance from HBase that needs to be converted
 	 * @return The appropriate instance of {@link Tuple} that contains the needed information.
 	 */
@@ -86,15 +91,21 @@ public abstract class HBaseInputFormat<T extends Tuple> extends AbstractTableInp
 	 * Create an {@link HTable} instance and set it into this format.
 	 */
 	private HTable createTable() {
-		LOG.info("Initializing HBaseConfiguration");
-		org.apache.hadoop.conf.Configuration hConf = getHadoopConfiguration();
-
 		try {
-			return new HTable(hConf, getTableName());
+			return (HTable) getConnection().getTable(TableName.valueOf(getTableName()));
 		} catch (Exception e) {
 			LOG.error("Error instantiating a new HTable instance", e);
 		}
 		return null;
+	}
+
+	private static Connection conn;
+
+	private synchronized Connection getConnection() throws IOException {
+		if (conn == null) {
+			conn = ConnectionFactory.createConnection(getHadoopConfiguration());
+		}
+		return conn;
 	}
 
 	protected T mapResultToOutType(Result r) {

@@ -144,8 +144,8 @@ public abstract class HBaseTestingClusterAutoStarter extends AbstractTestBase {
 		TEST_UTIL.getConfiguration().setInt("hbase.master.info.port", -1);
 
 		// Make sure the zookeeper quorum value contains the right port number (varies per run).
-		LOG.info("Hbase minicluster client port: " + TEST_UTIL.getZkCluster().getClientPort());
-		TEST_UTIL.getConfiguration().set("hbase.zookeeper.quorum", "localhost:" + TEST_UTIL.getZkCluster().getClientPort());
+		LOG.info("Hbase minicluster client port:2181 ");
+		TEST_UTIL.getConfiguration().set("hbase.zookeeper.quorum", "localhost:2181");
 
 		conf = initialize(TEST_UTIL.getConfiguration());
 		LOG.info("HBase minicluster: Running");
@@ -155,7 +155,7 @@ public abstract class HBaseTestingClusterAutoStarter extends AbstractTestBase {
 	 * Returns zookeeper quorum value contains the right port number (varies per run).
 	 */
 	protected static String getZookeeperQuorum() {
-		return "localhost:" + TEST_UTIL.getZkCluster().getClientPort();
+		return "localhost:2181";
 	}
 
 	public static Configuration getConf() {
