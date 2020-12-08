@@ -558,7 +558,7 @@ public class KafkaConsumerThread<T> extends Thread {
 				throw new Exception("consumer rate limit can not be negative");
 			}
 			this.limit = limit;
-			KafkaConsumerThread.this.log.info("Sleeper initialized with limit " + limit);
+			KafkaConsumerThread.this.log.info("Sleeper initialized with limit " + limit + "/s*p");
 		}
 
 		private Sleeper(String limit) throws Exception {
@@ -566,24 +566,24 @@ public class KafkaConsumerThread<T> extends Thread {
 		}
 
 		private void trySleep(long batch_size) {
-			KafkaConsumerThread.this.log.info("Sleeper try sleep with batch size " + batch_size);
+			KafkaConsumerThread.this.log.debug("Sleeper try sleep with batch size " + batch_size);
 			if (limit == 0) {
-				KafkaConsumerThread.this.log.info("Sleeper disabled, return directly");
+				KafkaConsumerThread.this.log.debug("Sleeper disabled, return directly");
 				return;
 			}
 			try {
 				cur_size += batch_size;
-				KafkaConsumerThread.this.log.info("Sleeper current size " + cur_size);
+				KafkaConsumerThread.this.log.debug("Sleeper current size " + cur_size);
 				if (cur_size >= limit) {
-					KafkaConsumerThread.this.log.info("Sleeper try sleep with current size " + cur_size);
+					KafkaConsumerThread.this.log.debug("Sleeper try sleep with current size " + cur_size);
 					long start_time = cur_size / limit * 1000 + last_start_time;
 					long current_time = System.currentTimeMillis();
 					if (start_time > current_time) {
-						KafkaConsumerThread.this.log.info("Sleeper try sleep from " + current_time + " to " + start_time);
+						KafkaConsumerThread.this.log.debug("Sleeper try sleep from " + current_time + " to " + start_time);
 						TimeUnit.MILLISECONDS.sleep(start_time - current_time);
 						last_start_time = start_time;
 					} else {
-						KafkaConsumerThread.this.log.info("Sleeper will not sleep because current time is later than sleep time");
+						KafkaConsumerThread.this.log.debug("Sleeper will not sleep because current time " + current_time + "is later than sleep time " + start_time);
 						last_start_time = current_time;
 					}
 					cur_size = 0;
