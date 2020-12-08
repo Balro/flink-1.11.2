@@ -28,7 +28,7 @@ under the License.
 
 	<groupId>org.apache.flink</groupId>
 	<artifactId>flink-parent</artifactId>
-	<version>1.11.2</version>
+	<version>1.11.2-cdh6.2.1</version>
 
 	<name>flink</name>
 	<packaging>pom</packaging>
@@ -106,7 +106,7 @@ under the License.
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<hadoop.version>2.4.1</hadoop.version>
+		<hadoop.version>3.0.0-cdh6.2.1</hadoop.version>
 		<!-- Need to use a user property here because the surefire
 			 forkCount is not exposed as a property. With this we can set
 			 it on the "mvn" commandline in travis. -->
