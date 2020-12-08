@@ -35,19 +35,19 @@ under the License.
 	<packaging>pom</packaging>
 
 	<properties>
-		<fs.hadoopshaded.version>3.0.0-cdh6.2.1</fs.hadoopshaded.version>
+		<fs.hadoopshaded.version>3.1.0</fs.hadoopshaded.version>
 	</properties>
 
 	<modules>
 		<module>flink-hadoop-fs</module>
 		<module>flink-mapr-fs</module>
-<!--		<module>flink-fs-hadoop-shaded</module>-->
+		<module>flink-fs-hadoop-shaded</module>
 		<module>flink-s3-fs-base</module>
 		<module>flink-s3-fs-hadoop</module>
 		<module>flink-s3-fs-presto</module>
 		<module>flink-swift-fs-hadoop</module>
 		<module>flink-oss-fs-hadoop</module>
-<!--		<module>flink-azure-fs-hadoop</module>-->
+		<module>flink-azure-fs-hadoop</module>
 	</modules>
 
 	<!-- Common dependency setup for all filesystems -->
