@@ -21,6 +21,7 @@ package org.apache.flink.formats.json;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ValueNode;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericArrayData;
@@ -43,7 +44,9 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.TextNode;
+import org.apache.flink.table.types.utils.TypeConversions;
 
+import javax.xml.bind.DatatypeConverter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Array;
@@ -53,10 +56,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAccessor;
 import java.time.temporal.TemporalQueries;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 import static java.lang.String.format;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
@@ -108,6 +108,12 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	 */
 	private final TimestampFormat timestampFormat;
 
+	/*
+	保存字段转换器。
+	 */
+	private final DeserializationRuntimeConverter[] fieldConverters;
+	private final List<String> fieldNames;
+
 	public JsonRowDataDeserializationSchema(
 		RowType rowType,
 		TypeInformation<RowData> resultTypeInfo,
@@ -121,8 +127,17 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 		this.resultTypeInfo = checkNotNull(resultTypeInfo);
 		this.failOnMissingField = failOnMissingField;
 		this.ignoreParseErrors = ignoreParseErrors;
+
+		RowType dataRowType = (RowType) ((ArrayType) (rowType.getTypeAt(0))).getElementType();
+		this.fieldNames = dataRowType.getFieldNames();
+		fieldConverters = dataRowType.getFields().stream()
+			.map(RowType.RowField::getType)
+			.map(this::createConverter)
+			.toArray(DeserializationRuntimeConverter[]::new);
 		this.runtimeConverter = createRowConverter(checkNotNull(rowType));
+
 		this.timestampFormat = timestampFormat;
+
 	}
 
 	@Override
@@ -136,6 +151,17 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 			}
 			throw new IOException(format("Failed to deserialize JSON '%s'.", new String(message)), t);
 		}
+	}
+
+	/**
+	 * 提取给定jsonnode的原始值。
+	 *
+	 * @param i     字段在schema中的位置。
+	 * @param field 字段的jsonnode值。
+	 * @return 转换后的原始值。
+	 */
+	public Object convertField(int i, JsonNode field) {
+		return convertField(fieldConverters[i], fieldNames.get(i), field);
 	}
 
 	@Override
@@ -315,7 +341,11 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	}
 
 	private StringData convertToString(JsonNode jsonNode) {
-		return StringData.fromString(jsonNode.asText());
+		if (jsonNode instanceof ValueNode) {
+			return StringData.fromString(jsonNode.asText());
+		} else {
+			return StringData.fromString(jsonNode.toString());
+		}
 	}
 
 	private byte[] convertToBytes(JsonNode jsonNode) {
