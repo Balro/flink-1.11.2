@@ -172,8 +172,7 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 						"Unknown \"type\" value \"%s\". The Canal JSON message is '%s'", type, new String(message)));
 				}
 			}
-		} catch (
-			Throwable t) {
+		} catch (Throwable t) {
 			// a big try catch to protect the processing.
 			if (!ignoreParseErrors) {
 				throw new IOException(format(
