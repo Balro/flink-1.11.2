@@ -22,6 +22,8 @@ import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.formats.json.TimestampFormat;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.GenericRowData;
@@ -32,6 +34,7 @@ import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
 
 import static java.lang.String.format;
@@ -56,23 +59,34 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 	private static final String OP_UPDATE = "UPDATE";
 	private static final String OP_DELETE = "DELETE";
 
-	/** The deserializer to deserialize Debezium JSON data. */
+	/**
+	 * The deserializer to deserialize Debezium JSON data.
+	 */
 	private final JsonRowDataDeserializationSchema jsonDeserializer;
 
-	/** TypeInformation of the produced {@link RowData}. **/
+	/**
+	 * TypeInformation of the produced {@link RowData}.
+	 **/
 	private final TypeInformation<RowData> resultTypeInfo;
 
-	/** Flag indicating whether to ignore invalid fields/rows (default: throw an exception). */
+	/**
+	 * Flag indicating whether to ignore invalid fields/rows (default: throw an exception).
+	 */
 	private final boolean ignoreParseErrors;
 
-	/** Number of fields. */
+	/**
+	 * Number of fields.
+	 */
 	private final int fieldCount;
 
+	private final List<String> fieldNames;
+
 	public CanalJsonDeserializationSchema(
-			RowType rowType,
-			TypeInformation<RowData> resultTypeInfo,
-			boolean ignoreParseErrors,
-			TimestampFormat timestampFormatOption) {
+		RowType rowType,
+		TypeInformation<RowData> resultTypeInfo,
+		boolean ignoreParseErrors,
+		TimestampFormat timestampFormatOption) {
+		this.fieldNames = rowType.getFieldNames();
 		this.resultTypeInfo = resultTypeInfo;
 		this.ignoreParseErrors = ignoreParseErrors;
 		this.fieldCount = rowType.getFieldCount();
@@ -113,18 +127,35 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 				for (int i = 0; i < data.size(); i++) {
 					// the underlying JSON deserialization schema always produce GenericRowData.
 					GenericRowData after = (GenericRowData) data.getRow(i, fieldCount);
-					GenericRowData before = (GenericRowData) old.getRow(i, fieldCount);
+					String before = old.getString(i).toString();
+					JsonNode beforeJson = new ObjectMapper().readTree(before);
+
+					/*
+					旧逻辑:
+						for (int f = 0; f < fieldCount; f++) {
+							if (before.isNullAt(f)) {
+								// not null fields in "old" (before) means the fields are changed
+								// null/empty fields in "old" (before) means the fields are not changed
+								// so we just copy the not changed fields into before
+								before.setField(f, after.getField(f));
+							}
+						}
+						before用old字段的值补全到全字段，如果存在null值，则用after的值补全。
+						存在bug，如果old中的值本来就为null，那么会导致before中应该为null的值变为了after的值，会额外retract一次。
+					新逻辑:
+						before用old字段的值补全，如果old中存在值，不论是否为null，则全部取old中的值，否则取after的值。
+					 */
+					GenericRowData beforeRow = new GenericRowData(fieldCount);
 					for (int f = 0; f < fieldCount; f++) {
-						if (before.isNullAt(f)) {
-							// not null fields in "old" (before) means the fields are changed
-							// null/empty fields in "old" (before) means the fields are not changed
-							// so we just copy the not changed fields into before
-							before.setField(f, after.getField(f));
+						if (beforeJson.has(fieldNames.get(f))) {
+							beforeRow.setField(f, jsonDeserializer.convertField(f, beforeJson.get(fieldNames.get(f))));
+						} else {
+							beforeRow.setField(f, after.getField(f));
 						}
 					}
-					before.setRowKind(RowKind.UPDATE_BEFORE);
+					beforeRow.setRowKind(RowKind.UPDATE_BEFORE);
 					after.setRowKind(RowKind.UPDATE_AFTER);
-					out.collect(before);
+					out.collect(beforeRow);
 					out.collect(after);
 				}
 			} else if (OP_DELETE.equals(type)) {
@@ -141,13 +172,15 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 						"Unknown \"type\" value \"%s\". The Canal JSON message is '%s'", type, new String(message)));
 				}
 			}
-		} catch (Throwable t) {
+		} catch (
+			Throwable t) {
 			// a big try catch to protect the processing.
 			if (!ignoreParseErrors) {
 				throw new IOException(format(
 					"Corrupt Canal JSON message '%s'.", new String(message)), t);
 			}
 		}
+
 	}
 
 	@Override
@@ -185,7 +218,7 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 		// but we don't need them
 		return (RowType) DataTypes.ROW(
 			DataTypes.FIELD("data", DataTypes.ARRAY(databaseSchema)),
-			DataTypes.FIELD("old", DataTypes.ARRAY(databaseSchema)),
+			DataTypes.FIELD("old", DataTypes.ARRAY(DataTypes.STRING())),
 			DataTypes.FIELD("type", DataTypes.STRING())).getLogicalType();
 	}
 }

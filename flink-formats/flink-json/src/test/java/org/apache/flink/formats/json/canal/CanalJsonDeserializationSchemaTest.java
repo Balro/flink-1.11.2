@@ -129,7 +129,14 @@ public class CanalJsonDeserializationSchemaTest {
 			"-U(102,car battery,12V car battery,8.1)",
 			"+U(102,car battery,12V car battery,5.17)",
 			"-D(102,car battery,12V car battery,5.17)",
-			"-D(103,12-pack drill bits,12-pack of drill bits with sizes ranging from #40 to #3,0.8)"
+			"-D(103,12-pack drill bits,12-pack of drill bits with sizes ranging from #40 to #3,0.8)",
+			// 修复canal格式，旧字段为null时，可以在before_update中正常显示为null字段，而非after_update中的字段。
+			"+I(113,scooter,null,3.14)",
+			"+I(114,null,12V car battery,8.1)",
+			"-U(113,scooter,null,3.14)",
+			"+U(113,scooter,Small 2-wheel scooter,5.17)",
+			"-U(114,null,12V car battery,8.1)",
+			"+U(114,car battery,12V car battery,5.17)"
 		);
 		assertEquals(expected, collector.list);
 	}

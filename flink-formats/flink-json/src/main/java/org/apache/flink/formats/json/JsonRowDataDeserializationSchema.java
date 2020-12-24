@@ -21,6 +21,7 @@ package org.apache.flink.formats.json;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ValueNode;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericArrayData;
@@ -43,7 +44,9 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.TextNode;
+import org.apache.flink.table.types.utils.TypeConversions;
 
+import javax.xml.bind.DatatypeConverter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Array;
@@ -53,10 +56,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAccessor;
 import java.time.temporal.TemporalQueries;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 import static java.lang.String.format;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
@@ -77,32 +77,49 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 public class JsonRowDataDeserializationSchema implements DeserializationSchema<RowData> {
 	private static final long serialVersionUID = 1L;
 
-	/** Flag indicating whether to fail if a field is missing. */
+	/**
+	 * Flag indicating whether to fail if a field is missing.
+	 */
 	private final boolean failOnMissingField;
 
-	/** Flag indicating whether to ignore invalid fields/rows (default: throw an exception). */
+	/**
+	 * Flag indicating whether to ignore invalid fields/rows (default: throw an exception).
+	 */
 	private final boolean ignoreParseErrors;
 
-	/** TypeInformation of the produced {@link RowData}. **/
+	/**
+	 * TypeInformation of the produced {@link RowData}.
+	 **/
 	private final TypeInformation<RowData> resultTypeInfo;
 
 	/**
 	 * Runtime converter that converts {@link JsonNode}s into
-	 * objects of Flink SQL internal data structures. **/
+	 * objects of Flink SQL internal data structures.
+	 **/
 	private final DeserializationRuntimeConverter runtimeConverter;
 
-	/** Object mapper for parsing the JSON. */
+	/**
+	 * Object mapper for parsing the JSON.
+	 */
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
-	/** Timestamp format specification which is used to parse timestamp. */
+	/**
+	 * Timestamp format specification which is used to parse timestamp.
+	 */
 	private final TimestampFormat timestampFormat;
 
+	/*
+	保存字段转换器。
+	 */
+	private final DeserializationRuntimeConverter[] fieldConverters;
+	private final List<String> fieldNames;
+
 	public JsonRowDataDeserializationSchema(
-			RowType rowType,
-			TypeInformation<RowData> resultTypeInfo,
-			boolean failOnMissingField,
-			boolean ignoreParseErrors,
-			TimestampFormat timestampFormat) {
+		RowType rowType,
+		TypeInformation<RowData> resultTypeInfo,
+		boolean failOnMissingField,
+		boolean ignoreParseErrors,
+		TimestampFormat timestampFormat) {
 		if (ignoreParseErrors && failOnMissingField) {
 			throw new IllegalArgumentException(
 				"JSON format doesn't support failOnMissingField and ignoreParseErrors are both enabled.");
@@ -110,8 +127,17 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 		this.resultTypeInfo = checkNotNull(resultTypeInfo);
 		this.failOnMissingField = failOnMissingField;
 		this.ignoreParseErrors = ignoreParseErrors;
+
+		RowType dataRowType = (RowType) ((ArrayType) (rowType.getTypeAt(0))).getElementType();
+		this.fieldNames = dataRowType.getFieldNames();
+		fieldConverters = dataRowType.getFields().stream()
+			.map(RowType.RowField::getType)
+			.map(this::createConverter)
+			.toArray(DeserializationRuntimeConverter[]::new);
 		this.runtimeConverter = createRowConverter(checkNotNull(rowType));
+
 		this.timestampFormat = timestampFormat;
+
 	}
 
 	@Override
@@ -125,6 +151,17 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 			}
 			throw new IOException(format("Failed to deserialize JSON '%s'.", new String(message)), t);
 		}
+	}
+
+	/**
+	 * 提取给定jsonnode的原始值。
+	 *
+	 * @param i     字段在schema中的位置。
+	 * @param field 字段的jsonnode值。
+	 * @return 转换后的原始值。
+	 */
+	public Object convertField(int i, JsonNode field) {
+		return convertField(fieldConverters[i], fieldNames.get(i), field);
 	}
 
 	@Override
@@ -147,9 +184,9 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 		}
 		JsonRowDataDeserializationSchema that = (JsonRowDataDeserializationSchema) o;
 		return failOnMissingField == that.failOnMissingField &&
-				ignoreParseErrors == that.ignoreParseErrors &&
-				resultTypeInfo.equals(that.resultTypeInfo) &&
-				timestampFormat.equals(that.timestampFormat);
+			ignoreParseErrors == that.ignoreParseErrors &&
+			resultTypeInfo.equals(that.resultTypeInfo) &&
+			timestampFormat.equals(that.timestampFormat);
 	}
 
 	@Override
@@ -287,7 +324,7 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 
 	private TimestampData convertToTimestamp(JsonNode jsonNode) {
 		TemporalAccessor parsedTimestamp;
-		switch (timestampFormat){
+		switch (timestampFormat) {
 			case SQL:
 				parsedTimestamp = SQL_TIMESTAMP_FORMAT.parse(jsonNode.asText());
 				break;
@@ -304,7 +341,11 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	}
 
 	private StringData convertToString(JsonNode jsonNode) {
-		return StringData.fromString(jsonNode.asText());
+		if (jsonNode instanceof ValueNode) {
+			return StringData.fromString(jsonNode.asText());
+		} else {
+			return StringData.fromString(jsonNode.toString());
+		}
 	}
 
 	private byte[] convertToBytes(JsonNode jsonNode) {
@@ -348,7 +389,7 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 		if (!LogicalTypeChecks.hasFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
 			throw new UnsupportedOperationException(
 				"JSON format doesn't support non-string as key type of map. " +
-				"The map type is: " + mapType.asSummaryString());
+					"The map type is: " + mapType.asSummaryString());
 		}
 		final DeserializationRuntimeConverter keyConverter = createConverter(keyType);
 		final DeserializationRuntimeConverter valueConverter = createConverter(mapType.getValueType());
@@ -388,9 +429,9 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	}
 
 	private Object convertField(
-			DeserializationRuntimeConverter fieldConverter,
-			String fieldName,
-			JsonNode field) {
+		DeserializationRuntimeConverter fieldConverter,
+		String fieldName,
+		JsonNode field) {
 		if (field == null) {
 			if (failOnMissingField) {
 				throw new JsonParseException(
@@ -404,7 +445,7 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	}
 
 	private DeserializationRuntimeConverter wrapIntoNullableConverter(
-			DeserializationRuntimeConverter converter) {
+		DeserializationRuntimeConverter converter) {
 		return jsonNode -> {
 			if (jsonNode == null || jsonNode.isNull()) {
 				return null;
@@ -422,7 +463,7 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 
 	/**
 	 * Exception which refers to parse errors in converters.
-	 * */
+	 */
 	private static final class JsonParseException extends RuntimeException {
 		private static final long serialVersionUID = 1L;
 
