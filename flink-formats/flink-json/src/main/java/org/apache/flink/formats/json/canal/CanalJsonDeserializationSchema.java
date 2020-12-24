@@ -56,23 +56,31 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 	private static final String OP_UPDATE = "UPDATE";
 	private static final String OP_DELETE = "DELETE";
 
-	/** The deserializer to deserialize Debezium JSON data. */
+	/**
+	 * The deserializer to deserialize Debezium JSON data.
+	 */
 	private final JsonRowDataDeserializationSchema jsonDeserializer;
 
-	/** TypeInformation of the produced {@link RowData}. **/
+	/**
+	 * TypeInformation of the produced {@link RowData}.
+	 **/
 	private final TypeInformation<RowData> resultTypeInfo;
 
-	/** Flag indicating whether to ignore invalid fields/rows (default: throw an exception). */
+	/**
+	 * Flag indicating whether to ignore invalid fields/rows (default: throw an exception).
+	 */
 	private final boolean ignoreParseErrors;
 
-	/** Number of fields. */
+	/**
+	 * Number of fields.
+	 */
 	private final int fieldCount;
 
 	public CanalJsonDeserializationSchema(
-			RowType rowType,
-			TypeInformation<RowData> resultTypeInfo,
-			boolean ignoreParseErrors,
-			TimestampFormat timestampFormatOption) {
+		RowType rowType,
+		TypeInformation<RowData> resultTypeInfo,
+		boolean ignoreParseErrors,
+		TimestampFormat timestampFormatOption) {
 		this.resultTypeInfo = resultTypeInfo;
 		this.ignoreParseErrors = ignoreParseErrors;
 		this.fieldCount = rowType.getFieldCount();
