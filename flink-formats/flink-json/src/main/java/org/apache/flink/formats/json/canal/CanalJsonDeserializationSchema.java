@@ -79,6 +79,7 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 	 */
 	private final int fieldCount;
 
+	private final JsonRowDataDeserializationSchema.DeserializationRuntimeConverter[] fieldConverters;
 	private final List<String> fieldNames;
 
 	public CanalJsonDeserializationSchema(
@@ -97,7 +98,7 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 			false, // ignoreParseErrors already contains the functionality of failOnMissingField
 			ignoreParseErrors,
 			timestampFormatOption);
-
+		this.fieldConverters = this.jsonDeserializer.getFieldConverters(rowType);
 	}
 
 	@Override
@@ -148,7 +149,7 @@ public final class CanalJsonDeserializationSchema implements DeserializationSche
 					GenericRowData beforeRow = new GenericRowData(fieldCount);
 					for (int f = 0; f < fieldCount; f++) {
 						if (beforeJson.has(fieldNames.get(f))) {
-							beforeRow.setField(f, jsonDeserializer.convertField(f, beforeJson.get(fieldNames.get(f))));
+							beforeRow.setField(f, jsonDeserializer.convertField(fieldConverters,fieldNames,f, beforeJson.get(fieldNames.get(f))));
 						} else {
 							beforeRow.setField(f, after.getField(f));
 						}

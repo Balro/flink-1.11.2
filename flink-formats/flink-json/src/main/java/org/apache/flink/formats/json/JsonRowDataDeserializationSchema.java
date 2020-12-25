@@ -21,32 +21,18 @@ package org.apache.flink.formats.json;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ValueNode;
-import org.apache.flink.table.api.TableException;
-import org.apache.flink.table.data.DecimalData;
-import org.apache.flink.table.data.GenericArrayData;
-import org.apache.flink.table.data.GenericMapData;
-import org.apache.flink.table.data.GenericRowData;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.TimestampData;
-import org.apache.flink.table.types.logical.ArrayType;
-import org.apache.flink.table.types.logical.DecimalType;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.LogicalTypeFamily;
-import org.apache.flink.table.types.logical.MapType;
-import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
-import org.apache.flink.table.types.logical.utils.LogicalTypeUtils;
-
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.TextNode;
-import org.apache.flink.table.types.utils.TypeConversions;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ValueNode;
+import org.apache.flink.table.api.TableException;
+import org.apache.flink.table.data.*;
+import org.apache.flink.table.types.logical.*;
+import org.apache.flink.table.types.logical.utils.LogicalTypeChecks;
+import org.apache.flink.table.types.logical.utils.LogicalTypeUtils;
 
-import javax.xml.bind.DatatypeConverter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Array;
@@ -60,9 +46,7 @@ import java.util.*;
 
 import static java.lang.String.format;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
-import static org.apache.flink.formats.json.TimeFormats.ISO8601_TIMESTAMP_FORMAT;
-import static org.apache.flink.formats.json.TimeFormats.SQL_TIMESTAMP_FORMAT;
-import static org.apache.flink.formats.json.TimeFormats.SQL_TIME_FORMAT;
+import static org.apache.flink.formats.json.TimeFormats.*;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -108,12 +92,6 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	 */
 	private final TimestampFormat timestampFormat;
 
-	/*
-	保存字段转换器。
-	 */
-	private final DeserializationRuntimeConverter[] fieldConverters;
-	private final List<String> fieldNames;
-
 	public JsonRowDataDeserializationSchema(
 		RowType rowType,
 		TypeInformation<RowData> resultTypeInfo,
@@ -127,17 +105,8 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 		this.resultTypeInfo = checkNotNull(resultTypeInfo);
 		this.failOnMissingField = failOnMissingField;
 		this.ignoreParseErrors = ignoreParseErrors;
-
-		RowType dataRowType = (RowType) ((ArrayType) (rowType.getTypeAt(0))).getElementType();
-		this.fieldNames = dataRowType.getFieldNames();
-		fieldConverters = dataRowType.getFields().stream()
-			.map(RowType.RowField::getType)
-			.map(this::createConverter)
-			.toArray(DeserializationRuntimeConverter[]::new);
 		this.runtimeConverter = createRowConverter(checkNotNull(rowType));
-
 		this.timestampFormat = timestampFormat;
-
 	}
 
 	@Override
@@ -154,13 +123,25 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	}
 
 	/**
+	 * 获取给定格式的列转换器。
+	 */
+	public DeserializationRuntimeConverter[] getFieldConverters(RowType rowType) {
+		return rowType.getFields().stream()
+			.map(RowType.RowField::getType)
+			.map(this::createConverter)
+			.toArray(DeserializationRuntimeConverter[]::new);
+	}
+
+	/**
 	 * 提取给定jsonnode的原始值。
 	 *
-	 * @param i     字段在schema中的位置。
-	 * @param field 字段的jsonnode值。
+	 * @param fieldConverters 外部缓存的字段转换器。
+	 * @param fieldNames      外部缓存的字段名列表。
+	 * @param i               字段在schema中的位置。
+	 * @param field           字段的jsonnode值。
 	 * @return 转换后的原始值。
 	 */
-	public Object convertField(int i, JsonNode field) {
+	public Object convertField(DeserializationRuntimeConverter[] fieldConverters, List<String> fieldNames, int i, JsonNode field) {
 		return convertField(fieldConverters[i], fieldNames.get(i), field);
 	}
 
@@ -203,7 +184,7 @@ public class JsonRowDataDeserializationSchema implements DeserializationSchema<R
 	 * internal data structures.
 	 */
 	@FunctionalInterface
-	private interface DeserializationRuntimeConverter extends Serializable {
+	public interface DeserializationRuntimeConverter extends Serializable {
 		Object convert(JsonNode jsonNode);
 	}
 
