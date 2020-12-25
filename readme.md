@@ -16,6 +16,7 @@
 * flink-dist  
     默认添加-d参数，启用后台模式。  
 * flink-json
+    # https://issues.apache.org/jira/browse/FLINK-20763
     修复canal在读取update记录，当旧记录中存在null值，-U记录的null值以外被新值覆盖，导致retract计数错误的bug。  
         org.apache.flink.formats.json.canal.CanalJsonDeserializationSchema  
         org.apache.flink.formats.json.JsonRowDataDeserializationSchema  
